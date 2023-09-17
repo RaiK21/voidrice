@@ -1,0 +1,61 @@
+#!/bin/bash
+
+# Check if the script is not already running with root permissions
+if [ "$EUID" -ne 0 ]; then
+    sudo "$0" "$@"  # Re-run the script with sudo
+    exit $?  # Exit with the same exit code as the sudo command
+fi
+
+MAX_BRIGHTNESS=$(cat /sys/class/backlight/amdgpu_bl1/max_brightness);
+USERNAME=$(whoami)
+
+error_report(){
+    printf "Error: The backlight brightness value $1 is out of range. Use only [0,1]\n";
+}
+
+setBrightness(){
+    VALUE="$1"
+    
+    # Round the input value to the nearest integer within the valid brightness range
+    BRIGHTNESS=$(awk -v value="$VALUE" -v max="$MAX_BRIGHTNESS" 'BEGIN{print int(value * max + 0.5)}')
+
+    if [ "$BRIGHTNESS" -ge 0 ] && [ "$BRIGHTNESS" -le "$MAX_BRIGHTNESS" ]; then
+        echo "$BRIGHTNESS" > /sys/class/backlight/amdgpu_bl1/brightness;
+    else
+        error_report "$VALUE";
+    fi;
+}
+
+if [ -n "$1" ]; then
+    # If a command-line argument is provided, set the brightness directly
+    case "$1" in
+        1) setBrightness 0.0 ;;
+        2) setBrightness 0.3 ;;
+        3) setBrightness 0.7 ;;
+        4) setBrightness 1.0 ;;
+        *) setBrightness "$1" ;;
+    esac
+else
+    # If no argument is provided, show preset options and prompt for a custom value
+    echo "Brightness Presets:"
+    echo "1. Min (0.0)"
+    echo "2. Low (0.3)"
+    echo "3. High (0.7)"
+    echo "4. Max (1.0)"
+    echo "Enter the number of the preset (1-4) or press Enter for custom value: "
+    read CHOICE
+
+    case "$CHOICE" in
+        1) setBrightness 0.0 ;;
+        2) setBrightness 0.3 ;;
+        3) setBrightness 0.7 ;;
+        4) setBrightness 1.0 ;;
+        *) if [[ "$CHOICE" =~ ^[0-9]*\.?[0-9]+$ ]]; then
+               setBrightness "$CHOICE"
+           else
+               echo "Invalid input. Enter a custom value between 0 and 1: "
+               read CUSTOM_VALUE
+               setBrightness "$CUSTOM_VALUE"
+           fi ;;
+    esac
+fi;
